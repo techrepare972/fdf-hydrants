@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FDF Hydrants - Services Techniques</title>
+    
+    <!-- Importation des outils (CDNs) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .tab-active { border-bottom: 4px solid #e11d48; color: #e11d48; background-color: #fff1f2; }
+        .hidden { display: none; }
+        input:focus, select:focus, textarea:focus { outline: 2px solid #fb7185; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 pb-12">
+
+    <!-- Notification Flottante -->
+    <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 hidden animate-bounce">
+        <i id="toast-icon" data-lucide="info" class="w-5 h-5"></i>
+        <span id="toast-text" class="text-sm font-bold uppercase tracking-wider"></span>
+    </div>
+
+    <!-- Navigation Mobile-Optimized -->
+    <nav class="max-w-md mx-auto flex bg-white border-b sticky top-0 z-50 shadow-sm">
+        <button onclick="switchTab('form')" id="btn-form" class="flex-1 py-4 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 tab-active transition-all">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i> Relevé
+        </button>
+        <button onclick="switchTab('history')" id="btn-history" class="flex-1 py-4 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 text-slate-400 transition-all">
+            <i data-lucide="database" class="w-4 h-4"></i> Historique <span id="badge-count" class="ml-1 bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">0</span>
+        </button>
+    </nav>
+
+    <main class="max-w-md mx-auto p-4 md:p-6">
+        
+        <!-- SECTION : FORMULAIRE -->
+        <div id="tab-section-form" class="space-y-4 animate-in fade-in duration-500">
+            <div class="bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-slate-200">
+                <!-- Header Ville -->
+                <div class="bg-gradient-to-br from-rose-700 to-rose-600 p-6 text-white">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.3em] opacity-80 mb-1">Ville de Fort-de-France</p>
+                    <h1 class="text-xl font-black uppercase leading-tight tracking-tighter italic">Contrôle Hydrants</h1>
+                </div>
+
+                <div class="p-6 space-y-5" id="main-form">
+                    <!-- Champs de saisie -->
+                    <div id="fields-container" class="space-y-4">
+                        <div>
+                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Numéro de l'Hydrant</label>
+                            <input type="text" id="inp-numero" placeholder="Ex: H-FDF-202" class="w-full p-4 bg-slate-50 rounded-2xl border-none font-black text-lg text-rose-700 placeholder:text-slate-300">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Débit (m³/h)</label>
+                                <input type="number" id="inp-debit" placeholder="0.0" class="w-full p-4 bg-slate-50 rounded-2xl border-none font-bold outline-none">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Pression (bar)</label>
+                                <input type="number" id="inp-pression" placeholder="0.0" class="w-full p-4 bg-slate-50 rounded-2xl border-none font-bold outline-none">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Localisation / Quartier</label>
+                            <div class="flex gap-2">
+                                <input type="text" id="inp-localisation" placeholder="Adresse ou repères" class="flex-1 p-4 bg-slate-50 rounded-2xl border-none outline-none">
+                                <button onclick="fetchGPS()" class="bg-rose-50 text-rose-600 p-4 rounded-2xl active:scale-90 transition-transform shadow-sm border border-rose-100">
+                                    <i data-lucide="map-pin"></i>
+                                </button>
+                            </div>
+                            <p id="display-gps" class="text-[9px] text-rose-500 font-mono mt-1 font-bold hidden uppercase ml-1"></p>
+                        </div>
+
+                        <div>
+                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Intervenant</label>
+                            <select id="inp-intervenant" class="w-full p-4 bg-slate-50 rounded-2xl border-none appearance-none font-bold text-slate-600 outline-none">
+                                <option value="Ville FDF">Régie Municipale FDF</option>
+                                <option value="SDIS">Pompiers (SDIS 972)</option>
+                                <option value="SME">SME (Eaux)</option>
+                                <option value="Prestataire">Entreprise Extérieure</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Photographie Terrain</label>
+                            <div id="photo-drop" class="flex flex-col items-center justify-center h-40 border-2 border-dashed border-slate-200 rounded-[2rem] cursor-pointer bg-slate-50 hover:bg-rose-50 transition-colors group" onclick="document.getElementById('inp-photo').click()">
+                                <i data-lucide="camera" class="text-slate-300 group-hover:text-rose-300 w-10 h-10 mb-2"></i>
+                                <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Prendre la photo</span>
+                            </div>
+                            <div id="photo-preview-box" class="relative hidden">
+                                <img id="img-preview" class="w-full h-56 object-cover rounded-[2rem] border-4 border-white shadow-2xl">
+                                <button onclick="removePhoto()" class="absolute top-3 right-3 bg-rose-600 text-white p-3 rounded-full shadow-lg active:scale-75"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
+                            </div>
+                            <input type="file" id="inp-photo" accept="image/*" capture="environment" class="hidden" onchange="previewPhoto(this)">
+                        </div>
+
+                        <div>
+                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Observations</label>
+                            <textarea id="inp-obs" placeholder="Notes techniques complémentaires..." class="w-full p-4 bg-slate-50 rounded-2xl border-none h-24 outline-none resize-none text-sm"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Zone de rendu Rapport (Cachée) -->
+                    <div id="render-zone" class="hidden bg-white p-6 space-y-8">
+                        <div class="border-b-4 border-rose-600 pb-4 text-center">
+                            <p class="text-xs font-black text-rose-600 tracking-[0.5em] uppercase mb-1">Ville de Fort-de-France</p>
+                            <h2 class="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">Fiche Technique d'Hydrant</h2>
+                            <p id="pdf-date" class="text-[10px] font-bold text-slate-400 mt-2 uppercase"></p>
+                        </div>
+                        <div class="grid grid-cols-2 gap-8 text-xs">
+                            <div class="space-y-4">
+                                <div><p class="text-slate-300 font-black uppercase mb-1 tracking-widest">N° Série</p><p id="pdf-num" class="text-lg font-black text-slate-900"></p></div>
+                                <div><p class="text-slate-300 font-black uppercase mb-1 tracking-widest">Localisation</p><p id="pdf-loc" class="font-bold text-slate-700"></p><p id="pdf-gps" class="text-rose-500 font-mono font-bold mt-1"></p></div>
+                            </div>
+                            <div class="bg-slate-50 p-4 rounded-3xl border-l-4 border-rose-600">
+                                <p class="text-slate-400 font-black uppercase mb-3">Mesures</p>
+                                <div class="flex justify-between border-b border-slate-200 pb-2 mb-2"><span>Débit:</span><span id="pdf-deb" class="font-black text-rose-600"></span></div>
+                                <div class="flex justify-between"><span>Pression:</span><span id="pdf-pre" class="font-black text-rose-600"></span></div>
+                            </div>
+                        </div>
+                        <div><p class="text-slate-300 font-black uppercase mb-2 tracking-widest">Observations</p><p id="pdf-obs" class="p-4 bg-slate-50 rounded-2xl italic text-slate-600 border border-slate-100"></p></div>
+                        <img id="pdf-img" class="w-full rounded-[2.5rem] border-8 border-white shadow-2xl">
+                    </div>
+                </div>
+
+                <!-- Pied de page - Actions -->
+                <div class="p-6 bg-slate-50 border-t flex gap-3">
+                    <button onclick="saveRecord()" class="flex-1 bg-slate-900 text-white font-black py-4 rounded-2xl shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all uppercase text-[10px] tracking-widest">
+                        <i data-lucide="save" class="w-4 h-4"></i> Sauvegarder
+                    </button>
+                    <button onclick="generatePDF()" class="flex-1 bg-rose-600 text-white font-black py-4 rounded-2xl shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all uppercase text-[10px] tracking-widest">
+                        <i data-lucide="file-text" class="w-4 h-4"></i> Rapport PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION : HISTORIQUE -->
+        <div id="tab-section-history" class="hidden space-y-4 animate-in slide-in-from-right-8 duration-500">
+            <div class="bg-white p-5 rounded-[2.5rem] shadow-sm border border-slate-200 flex flex-col gap-4">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="font-black text-slate-800 uppercase tracking-tighter text-sm">Base de Données</h2>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Stockage local sécurisé</p>
+                    </div>
+                    <button onclick="exportExcel()" class="bg-green-50 text-green-700 p-4 rounded-2xl active:scale-90 border border-green-100 shadow-sm">
+                        <i data-lucide="file-spreadsheet" class="w-6 h-6"></i>
+                    </button>
+                </div>
+                <div class="relative">
+                    <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4"></i>
+                    <input type="text" id="search-bar" oninput="drawHistory()" placeholder="Filtrer par numéro..." class="w-full bg-slate-50 rounded-2xl pl-12 pr-4 py-3 text-sm font-bold border-none outline-none focus:ring-2 focus:ring-rose-400">
+                </div>
+            </div>
+
+            <div id="list-container" class="space-y-3">
+                <!-- Les entrées seront injectées ici -->
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // --- VARIABLES GLOBALES ---
+        let records = JSON.parse(localStorage.getItem('fdf_hydrant_data_v1')) || [];
+        let tempPhoto = null;
+        let editId = null;
+
+        // --- DEMARRAGE ---
+        window.onload = () => {
+            lucide.createIcons();
+            updateCount();
+        };
+
+        // --- ONGLETS ---
+        function switchTab(target) {
+            document.getElementById('tab-section-form').classList.toggle('hidden', target !== 'form');
+            document.getElementById('tab-section-history').classList.toggle('hidden', target !== 'history');
+            
+            document.getElementById('btn-form').classList.toggle('tab-active', target === 'form');
+            document.getElementById('btn-form').classList.toggle('text-slate-400', target !== 'form');
+            document.getElementById('btn-history').classList.toggle('tab-active', target === 'history');
+            document.getElementById('btn-history').classList.toggle('text-slate-400', target !== 'history');
+
+            if(target === 'history') drawHistory();
+        }
+
+        // --- FONCTIONS GEOLOC ---
+        function fetchGPS() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(p => {
+                    const c = `${p.coords.latitude.toFixed(6)}, ${p.coords.longitude.toFixed(6)}`;
+                    document.getElementById('display-gps').innerText = `GPS: ${c}`;
+                    document.getElementById('display-gps').classList.remove('hidden');
+                    popToast("Position capturée");
+                }, () => popToast("Erreur GPS", "error"));
+            }
+        }
+
+        // --- GESTION PHOTO ---
+        function previewPhoto(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    tempPhoto = e.target.result;
+                    document.getElementById('img-preview').src = tempPhoto;
+                    document.getElementById('photo-preview-box').classList.remove('hidden');
+                    document.getElementById('photo-drop').classList.add('hidden');
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        function removePhoto() {
+            tempPhoto = null;
+            document.getElementById('photo-preview-box').classList.add('hidden');
+            document.getElementById('photo-drop').classList.remove('hidden');
+            document.getElementById('inp-photo').value = "";
+        }
+
+        // --- ENREGISTREMENT ---
+        function saveRecord() {
+            const num = document.getElementById('inp-numero').value;
+            if(!num) return popToast("Numéro obligatoire", "error");
+
+            const data = {
+                id: editId || Date.now(),
+                num: num,
+                inter: document.getElementById('inp-intervenant').value,
+                loc: document.getElementById('inp-localisation').value,
+                gps: document.getElementById('display-gps').innerText.replace('GPS: ', ''),
+                deb: document.getElementById('inp-debit').value,
+                pre: document.getElementById('inp-pression').value,
+                obs: document.getElementById('inp-obs').value,
+                img: tempPhoto,
+                date: new Date().toLocaleString('fr-FR')
+            };
+
+            if(editId) {
+                records = records.map(r => r.id === editId ? data : r);
+            } else {
+                records.unshift(data);
+            }
+
+            localStorage.setItem('fdf_hydrant_data_v1', JSON.stringify(records));
+            popToast("Enregistré");
+            clearInputs();
+            updateCount();
+            switchTab('history');
+        }
+
+        function clearInputs() {
+            editId = null;
+            ['inp-numero', 'inp-localisation', 'inp-debit', 'inp-pression', 'inp-obs'].forEach(id => document.getElementById(id).value = "");
+            document.getElementById('display-gps').innerText = "";
+            document.getElementById('display-gps').classList.add('hidden');
+            removePhoto();
+        }
+
+        function editRecord(id) {
+            const r = records.find(x => x.id === id);
+            if(!r) return;
+            editId = r.id;
+            document.getElementById('inp-numero').value = r.num;
+            document.getElementById('inp-intervenant').value = r.inter;
+            document.getElementById('inp-localisation').value = r.loc;
+            document.getElementById('inp-debit').value = r.deb;
+            document.getElementById('inp-pression').value = r.pre;
+            document.getElementById('inp-obs').value = r.obs;
+            if(r.gps) {
+                document.getElementById('display-gps').innerText = `GPS: ${r.gps}`;
+                document.getElementById('display-gps').classList.remove('hidden');
+            }
+            if(r.img) {
+                tempPhoto = r.img;
+                document.getElementById('img-preview').src = tempPhoto;
+                document.getElementById('photo-preview-box').classList.remove('hidden');
+                document.getElementById('photo-drop').classList.add('hidden');
+            }
+            switchTab('form');
+        }
+
+        function deleteRecord(id) {
+            records = records.filter(r => r.id !== id);
+            localStorage.setItem('fdf_hydrant_data_v1', JSON.stringify(records));
+            drawHistory();
+            updateCount();
+            popToast("Supprimé", "error");
+        }
+
+        // --- AFFICHAGE HISTORIQUE ---
+        function drawHistory() {
+            const query = document.getElementById('search-bar').value.toLowerCase();
+            const box = document.getElementById('list-container');
+            box.innerHTML = "";
+
+            const filtered = records.filter(r => r.num.toLowerCase().includes(query));
+
+            if(filtered.length === 0) {
+                box.innerHTML = `<div class="text-center py-20 bg-white rounded-[2.5rem] border-2 border-dashed border-slate-200 text-slate-400 font-bold uppercase text-[10px] tracking-widest">Aucune donnée trouvée</div>`;
+                return;
+            }
+
+            filtered.forEach(r => {
+                const item = document.createElement('div');
+                item.className = "bg-white p-5 rounded-[2rem] border border-slate-200 shadow-sm flex items-center gap-4 transition-all active:scale-[0.98]";
+                item.innerHTML = `
+                    <div class="bg-rose-50 text-rose-600 p-4 rounded-2xl shadow-inner flex-shrink-0"><i data-lucide="droplets"></i></div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex justify-between items-start">
+                            <h3 class="font-black uppercase text-sm text-slate-800 truncate">#${r.num}</h3>
+                            <span class="text-[9px] font-black text-slate-300 uppercase italic">${r.date.split(' ')[0]}</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400 truncate mt-0.5">${r.loc || 'Localisation non définie'}</p>
+                    </div>
+                    <div class="flex gap-1">
+                        <button onclick="editRecord(${r.id})" class="p-2 text-slate-300 hover:text-blue-500"><i data-lucide="edit-2" class="w-5 h-5"></i></button>
+                        <button onclick="deleteRecord(${r.id})" class="p-2 text-slate-300 hover:text-rose-600"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
+                    </div>
+                `;
+                box.appendChild(item);
+            });
+            lucide.createIcons();
+        }
+
+        function updateCount() {
+            document.getElementById('badge-count').innerText = records.length;
+        }
+
+        // --- EXPORTATIONS ---
+        function exportExcel() {
+            if(records.length === 0) return popToast("Historique vide", "error");
+            const data = records.map(({img, id, ...rest}) => rest);
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Hydrants_FDF");
+            XLSX.writeFile(wb, `FDF_HYDRANTS_${new Date().toLocaleDateString().replace(/\//g,'-')}.xlsx`);
+            popToast("Excel prêt");
+        }
+
+        async function generatePDF() {
+            const num = document.getElementById('inp-numero').value;
+            if(!num) return popToast("Numéro requis", "error");
+
+            popToast("Génération PDF...");
+            
+            // Préparer template PDF
+            document.getElementById('fields-container').classList.add('hidden');
+            const pdfBox = document.getElementById('render-zone');
+            pdfBox.classList.remove('hidden');
+
+            document.getElementById('pdf-num').innerText = num;
+            document.getElementById('pdf-loc').innerText = document.getElementById('inp-localisation').value || "N/A";
+            document.getElementById('pdf-gps').innerText = document.getElementById('display-gps').innerText.replace('GPS: ', '');
+            document.getElementById('pdf-deb').innerText = (document.getElementById('inp-debit').value || '-') + " m³/h";
+            document.getElementById('pdf-pre').innerText = (document.getElementById('inp-pression').value || '-') + " bar";
+            document.getElementById('pdf-obs').innerText = document.getElementById('inp-obs').value || "Installation conforme aux normes en vigueur.";
+            document.getElementById('pdf-date').innerText = "Rapport généré le " + new Date().toLocaleString('fr-FR');
+            
+            if(tempPhoto) {
+                document.getElementById('pdf-img').src = tempPhoto;
+                document.getElementById('pdf-img').classList.remove('hidden');
+            } else {
+                document.getElementById('pdf-img').classList.add('hidden');
+            }
+
+            // Capture
+            setTimeout(async () => {
+                const canvas = await html2canvas(pdfBox, { scale: 2 });
+                const imgData = canvas.toDataURL('image/jpeg', 0.9);
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const w = pdf.internal.pageSize.getWidth();
+                const h = (canvas.height * w) / canvas.width;
+                pdf.addImage(imgData, 'JPEG', 0, 0, w, h);
+                pdf.save(`Rapport_Hydrant_${num}.pdf`);
+                
+                // Reset UI
+                pdfBox.classList.add('hidden');
+                document.getElementById('fields-container').classList.remove('hidden');
+                popToast("PDF Téléchargé");
+            }, 500);
+        }
+
+        // --- UTILITAIRES UI ---
+        function popToast(msg, type = 'success') {
+            const t = document.getElementById('toast');
+            const i = document.getElementById('toast-icon');
+            document.getElementById('toast-text').innerText = msg;
+            t.className = `fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-8 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-top-4 duration-300 ${type === 'error' ? 'bg-rose-600' : 'bg-slate-900'} text-white`;
+            t.classList.remove('hidden');
+            setTimeout(() => t.classList.add('hidden'), 3000);
+        }
+    </script>
+</body>
+</html>
