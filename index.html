@@ -302,7 +302,8 @@
             if (!tempPhotoFile) return currentPhotoURL || "";
 
             const extension = (tempPhotoFile.name.split('.').pop() || 'jpg').toLowerCase();
-            const path = `${docId}/photo.${extension}`;
+            const numero = document.getElementById('inp-numero').value.trim().replace(/\s+/g, '_');
+	    const path = `${numero}.${extension}`;
 
             const { error: uploadError } = await supabaseClient
                 .storage
