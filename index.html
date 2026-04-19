@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FDF Hydrants - Cloud Sync</title>
+    <title>FDF Hydrants - Cloud Sync & GPS</title>
     
     <!-- Bibliothèques -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -17,27 +17,28 @@
         body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
         .tab-active { border-bottom: 4px solid #e11d48; color: #e11d48; background-color: #fff1f2; }
         .hidden { display: none; }
-        /* Style pour la zone de capture PDF invisible mais présente pour le moteur de rendu */
+        /* Zone de rendu PDF optimisée (invisible à l'écran) */
         #render-zone {
             position: absolute;
             left: -9999px;
             top: 0;
-            width: 800px; /* Largeur fixe pour un rendu PDF propre */
+            width: 800px; 
             background: white;
         }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 pb-12">
 
-    <!-- Notification Flottante -->
+    <!-- Notification -->
     <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 hidden animate-bounce">
         <i id="toast-icon" data-lucide="info" class="w-5 h-5"></i>
         <span id="toast-text" class="text-sm font-bold uppercase tracking-wider"></span>
     </div>
 
-    <!-- Indicateur de synchronisation -->
-    <div id="sync-indicator" class="fixed bottom-4 right-4 z-[90] bg-slate-900/80 text-white text-[9px] px-3 py-1 rounded-full font-bold uppercase tracking-widest backdrop-blur-sm flex items-center gap-2">
-        <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> Connecté au Cloud
+    <!-- Indicateur Cloud -->
+    <div id="cloud-status" class="fixed bottom-4 right-4 z-[90] bg-slate-900/80 text-white text-[9px] px-3 py-1.5 rounded-full font-bold uppercase tracking-widest backdrop-blur-sm flex items-center gap-2">
+        <span id="status-dot" class="w-2 h-2 bg-amber-500 rounded-full"></span> 
+        <span id="status-text">Initialisation...</span>
     </div>
 
     <!-- Navigation -->
@@ -79,14 +80,14 @@
                         </div>
 
                         <div>
-                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Localisation / Quartier</label>
+                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Localisation / GPS</label>
                             <div class="flex gap-2">
                                 <input type="text" id="inp-localisation" placeholder="Adresse ou repères" class="flex-1 p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-rose-400">
                                 <button onclick="fetchGPS()" class="bg-rose-50 text-rose-600 p-4 rounded-2xl active:scale-90 transition-transform shadow-sm border border-rose-100">
                                     <i data-lucide="map-pin"></i>
                                 </button>
                             </div>
-                            <p id="display-gps" class="text-[9px] text-rose-500 font-mono mt-1 font-bold hidden uppercase ml-1"></p>
+                            <p id="display-gps" class="text-[10px] text-rose-500 font-mono mt-2 font-black hidden bg-rose-50 p-2 rounded-lg border border-rose-100"></p>
                         </div>
 
                         <div>
@@ -113,13 +114,13 @@
 
                         <div>
                             <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Observations</label>
-                            <textarea id="inp-obs" placeholder="Notes techniques complémentaires..." class="w-full p-4 bg-slate-50 rounded-2xl border-none h-24 outline-none resize-none text-sm"></textarea>
+                            <textarea id="inp-obs" placeholder="Notes techniques..." class="w-full p-4 bg-slate-50 rounded-2xl border-none h-24 outline-none resize-none text-sm"></textarea>
                         </div>
                     </div>
                 </div>
 
                 <div class="p-6 bg-slate-50 border-t flex gap-3">
-                    <button onclick="saveRecord()" class="flex-1 bg-slate-900 text-white font-black py-4 rounded-2xl shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all uppercase text-[10px] tracking-widest">
+                    <button id="btn-save" onclick="saveRecord()" class="flex-1 bg-slate-900 text-white font-black py-4 rounded-2xl shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all uppercase text-[10px] tracking-widest disabled:opacity-50">
                         <i data-lucide="save" class="w-4 h-4"></i> Sauvegarder
                     </button>
                     <button onclick="generatePDF()" class="flex-1 bg-rose-600 text-white font-black py-4 rounded-2xl shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all uppercase text-[10px] tracking-widest">
@@ -134,8 +135,8 @@
             <div class="bg-white p-5 rounded-[2.5rem] shadow-sm border border-slate-200 flex flex-col gap-4">
                 <div class="flex justify-between items-center">
                     <div>
-                        <h2 class="font-black text-slate-800 uppercase tracking-tighter text-sm">Base de Données Cloud</h2>
-                        <p id="sync-status-text" class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Synchronisation active</p>
+                        <h2 class="font-black text-slate-800 uppercase tracking-tighter text-sm">Cloud Synchronisé</h2>
+                        <p id="sync-status-text" class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Données partagées ville</p>
                     </div>
                     <button onclick="exportExcel()" class="bg-green-50 text-green-700 p-4 rounded-2xl active:scale-90 border border-green-100 shadow-sm">
                         <i data-lucide="file-spreadsheet" class="w-6 h-6"></i>
@@ -143,65 +144,45 @@
                 </div>
                 <div class="relative">
                     <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4"></i>
-                    <input type="text" id="search-bar" oninput="drawHistory()" placeholder="Filtrer par numéro..." class="w-full bg-slate-50 rounded-2xl pl-12 pr-4 py-3 text-sm font-bold border-none outline-none focus:ring-2 focus:ring-rose-400">
+                    <input type="text" id="search-bar" oninput="drawHistory()" placeholder="Chercher par numéro..." class="w-full bg-slate-50 rounded-2xl pl-12 pr-4 py-3 text-sm font-bold border-none outline-none focus:ring-2 focus:ring-rose-400">
                 </div>
             </div>
             <div id="list-container" class="space-y-3"></div>
         </div>
     </main>
 
-    <!-- Zone de rendu Rapport (Invisible pour l'utilisateur, visible pour le moteur de capture) -->
+    <!-- Zone de rendu Rapport (Invisible pour l'utilisateur) -->
     <div id="render-zone">
-        <div style="padding: 40px; background: white;">
+        <div style="padding: 40px; background: white; min-height: 1050px;">
             <div style="border-bottom: 4px solid #e11d48; padding-bottom: 20px; text-align: center; margin-bottom: 30px;">
-                <p style="font-size: 12px; font-weight: 900; color: #e11d48; text-transform: uppercase; letter-spacing: 5px; margin-bottom: 5px;">Ville de Fort-de-France</p>
+                <p style="font-size: 12px; font-weight: 900; color: #e11d48; text-transform: uppercase; letter-spacing: 5px;">Ville de Fort-de-France</p>
                 <h2 style="font-size: 28px; font-weight: 900; color: #1e293b; text-transform: uppercase; margin: 0;">Fiche Technique d'Hydrant</h2>
-                <p id="pdf-date" style="font-size: 10px; color: #94a3b8; margin-top: 10px; font-weight: bold; text-transform: uppercase;"></p>
+                <p id="pdf-date-render" style="font-size: 10px; color: #94a3b8; margin-top: 10px; font-weight: bold;"></p>
             </div>
-            
             <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
                 <div style="width: 45%;">
-                    <p style="color: #cbd5e1; font-weight: 900; text-transform: uppercase; font-size: 10px; margin-bottom: 5px; letter-spacing: 1px;">N° Série / Identification</p>
-                    <p id="pdf-num" style="font-size: 22px; font-weight: 900; color: #0f172a; margin: 0;"></p>
-                    
-                    <div style="margin-top: 20px;">
-                        <p style="color: #cbd5e1; font-weight: 900; text-transform: uppercase; font-size: 10px; margin-bottom: 5px; letter-spacing: 1px;">Localisation</p>
-                        <p id="pdf-loc" style="font-size: 14px; font-weight: bold; color: #334155; margin: 0;"></p>
-                        <p id="pdf-gps" style="color: #e11d48; font-family: monospace; font-size: 12px; font-weight: bold; margin-top: 5px;"></p>
-                    </div>
+                    <p style="color: #cbd5e1; font-weight: 900; text-transform: uppercase; font-size: 10px;">N° Identification</p>
+                    <p id="pdf-num" style="font-size: 22px; font-weight: 900; color: #0f172a;"></p>
+                    <p style="color: #cbd5e1; font-weight: 900; text-transform: uppercase; font-size: 10px; margin-top: 20px;">Localisation</p>
+                    <p id="pdf-loc" style="font-size: 14px; font-weight: bold; color: #334155;"></p>
+                    <p id="pdf-gps" style="color: #e11d48; font-family: monospace; font-size: 12px; font-weight: bold;"></p>
                 </div>
-                
                 <div style="width: 45%; background: #f8fafc; padding: 20px; border-radius: 20px; border-left: 5px solid #e11d48;">
-                    <p style="color: #94a3b8; font-weight: 900; text-transform: uppercase; font-size: 10px; margin-bottom: 15px;">Mesures Terrain</p>
-                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 10px;">
-                        <span style="font-weight: bold; color: #64748b; font-size: 12px;">Débit :</span>
-                        <span id="pdf-deb" style="font-weight: 900; color: #e11d48; font-size: 16px;"></span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between;">
-                        <span style="font-weight: bold; color: #64748b; font-size: 12px;">Pression :</span>
-                        <span id="pdf-pre" style="font-weight: 900; color: #e11d48; font-size: 16px;"></span>
-                    </div>
-                    <div style="margin-top: 20px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
-                        <p style="color: #94a3b8; font-weight: 900; text-transform: uppercase; font-size: 10px; margin-bottom: 5px;">Opérateur</p>
-                        <p id="pdf-int" style="font-weight: 900; color: #1e293b; text-transform: uppercase; font-size: 12px;"></p>
-                    </div>
+                    <p style="color: #94a3b8; font-weight: 900; text-transform: uppercase; font-size: 10px; margin-bottom: 10px;">Données Mesurées</p>
+                    <p style="font-size: 12px; margin-bottom: 5px;">Débit: <span id="pdf-deb" style="font-weight: 900; color: #e11d48;"></span></p>
+                    <p style="font-size: 12px; margin-bottom: 15px;">Pression: <span id="pdf-pre" style="font-weight: 900; color: #e11d48;"></span></p>
+                    <p style="font-size: 11px; padding-top: 10px; border-top: 1px solid #e2e8f0;">Intervenant: <span id="pdf-int" style="font-weight: 900;"></span></p>
                 </div>
             </div>
-
             <div style="margin-bottom: 30px;">
-                <p style="color: #cbd5e1; font-weight: 900; text-transform: uppercase; font-size: 10px; margin-bottom: 10px; letter-spacing: 1px;">Observations techniques</p>
-                <div style="padding: 20px; background: #f8fafc; border-radius: 15px; border: 1px solid #f1f5f9; font-style: italic; color: #475569; line-height: 1.5; font-size: 13px;">
-                    <span id="pdf-obs"></span>
-                </div>
+                <p style="color: #cbd5e1; font-weight: 900; text-transform: uppercase; font-size: 10px; margin-bottom: 10px;">Observations terrain</p>
+                <div id="pdf-obs" style="padding: 15px; background: #f8fafc; border-radius: 10px; font-style: italic; font-size: 13px; color: #475569; line-height: 1.5; border: 1px solid #f1f5f9;"></div>
             </div>
-
-            <div style="text-align: center;">
-                <p style="color: #cbd5e1; font-weight: 900; text-transform: uppercase; font-size: 10px; margin-bottom: 10px; letter-spacing: 1px;">Capture Visuelle</p>
-                <img id="pdf-img" style="width: 100%; border-radius: 30px; border: 10px solid white; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
+            <div style="text-align: center; margin-top: 20px;">
+                <img id="pdf-img" style="width: 100%; max-height: 450px; object-fit: cover; border-radius: 20px; border: 8px solid white; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
             </div>
-            
             <div style="margin-top: 50px; text-align: center; border-top: 1px solid #f1f5f9; padding-top: 20px;">
-                <p style="font-size: 9px; color: #cbd5e1; font-weight: bold; text-transform: uppercase; letter-spacing: 2px;">Document Certifié Services Techniques Fort-de-France</p>
+                <p style="font-size: 9px; color: #cbd5e1; font-weight: bold; text-transform: uppercase; letter-spacing: 2px;">Document Certifié Services Techniques FDF</p>
             </div>
         </div>
     </div>
@@ -212,81 +193,86 @@
         import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        // CONFIGURATION FIREBASE
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'fdf-hydrants-v1';
-        
+        // CONFIGURATION FIREBASE EXTRAITE DE VOTRE CAPTURE
+        const firebaseConfig = {
+            apiKey: "AIzaSyCN9h79LiZHiRP6nWfjVAqO3r-xj60IeKo",
+            authDomain: "fdf-hydrants.firebaseapp.com",
+            databaseURL: "https://fdf-hydrants-default-rtdb.firebaseio.com",
+            projectId: "fdf-hydrants",
+            storageBucket: "fdf-hydrants.firebasestorage.app",
+            messagingSenderId: "859367786756",
+            appId: "1:859367786756:web:cd70a08ffd1df1709f2851"
+        };
+
+        const appId = "fdf-hydrants-v2";
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        // --- VARIABLES GLOBALES ---
         let records = [];
         let tempPhoto = null;
         let editId = null;
 
-        // --- AUTHENTIFICATION ---
         async function initAuth() {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
+            try {
                 await signInAnonymously(auth);
+            } catch (e) {
+                setCloudStatus("Erreur Auth", "bg-red-500");
             }
         }
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
+                setCloudStatus("Connecté au Cloud", "bg-green-500");
                 listenToData();
             }
         });
 
-        // --- ÉCOUTE DES DONNÉES CLOUD ---
+        function setCloudStatus(text, colorClass) {
+            document.getElementById('status-text').innerText = text;
+            document.getElementById('status-dot').className = `w-2 h-2 rounded-full animate-pulse ${colorClass}`;
+        }
+
         function listenToData() {
-            const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'records');
+            // Utilisation du chemin strict pour l'environnement mais peut être simplifié pour Netlify
+            const colRef = collection(db, 'hydrants_data');
             onSnapshot(colRef, (snapshot) => {
                 records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                // Tri par date décroissante en mémoire JS
                 records.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-                updateCount();
+                updateUI();
                 drawHistory();
             }, (error) => {
-                console.error("Erreur Firestore:", error);
                 popToast("Erreur de synchronisation", "error");
             });
         }
 
-        // --- INITIALISATION UI ---
         window.onload = () => {
             lucide.createIcons();
             initAuth();
         };
 
-        // --- NAVIGATION ---
         window.switchTab = function(target) {
             document.getElementById('tab-section-form').classList.toggle('hidden', target !== 'form');
             document.getElementById('tab-section-history').classList.toggle('hidden', target !== 'history');
             
-            document.getElementById('btn-form').classList.toggle('tab-active', target === 'form');
-            document.getElementById('btn-form').classList.toggle('text-slate-400', target !== 'form');
-            document.getElementById('btn-history').classList.toggle('tab-active', target === 'history');
-            document.getElementById('btn-history').classList.toggle('text-slate-400', target !== 'history');
+            document.getElementById('btn-form').className = target === 'form' ? 'flex-1 py-4 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 tab-active transition-all' : 'flex-1 py-4 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 text-slate-400 transition-all';
+            document.getElementById('btn-history').className = target === 'history' ? 'flex-1 py-4 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 tab-active transition-all' : 'flex-1 py-4 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 text-slate-400 transition-all';
 
             if(target === 'history') drawHistory();
         };
 
-        // --- FONCTIONS GEOLOC ---
         window.fetchGPS = function() {
             if (navigator.geolocation) {
+                popToast("Positionnement...", "info");
                 navigator.geolocation.getCurrentPosition(p => {
                     const c = `${p.coords.latitude.toFixed(6)}, ${p.coords.longitude.toFixed(6)}`;
-                    document.getElementById('display-gps').innerText = `GPS: ${c}`;
+                    document.getElementById('display-gps').innerText = `POSITION GPS : ${c}`;
                     document.getElementById('display-gps').classList.remove('hidden');
-                    popToast("Position capturée");
-                }, () => popToast("Erreur GPS", "error"));
+                    popToast("GPS capturé");
+                }, () => popToast("Activez le GPS", "error"), { enableHighAccuracy: true });
             }
         };
 
-        // --- GESTION PHOTO ---
         window.previewPhoto = function(input) {
             if (input.files && input.files[0]) {
                 const reader = new FileReader();
@@ -307,38 +293,36 @@
             document.getElementById('inp-photo').value = "";
         };
 
-        // --- ENREGISTREMENT CLOUD ---
         window.saveRecord = async function() {
-            const user = auth.currentUser;
-            if (!user) return popToast("Authentification en cours...", "error");
-
+            if (!auth.currentUser) return popToast("Connexion...", "error");
             const num = document.getElementById('inp-numero').value;
-            if(!num) return popToast("Numéro obligatoire", "error");
+            if(!num) return popToast("Numéro requis", "error");
 
-            popToast("Synchronisation...", "info");
-
-            const id = editId || Date.now().toString();
+            document.getElementById('btn-save').disabled = true;
+            const docId = editId || Date.now().toString();
             const data = {
                 num: num,
                 inter: document.getElementById('inp-intervenant').value,
                 loc: document.getElementById('inp-localisation').value,
-                gps: document.getElementById('display-gps').innerText.replace('GPS: ', ''),
+                gps: document.getElementById('display-gps').innerText.replace('POSITION GPS : ', ''),
                 deb: document.getElementById('inp-debit').value,
                 pre: document.getElementById('inp-pression').value,
-                obs: document.getElementById('inp-obs').value,
+                obs: document.getElementById('inp-obs').value || "RAS",
                 img: tempPhoto,
                 date: new Date().toLocaleString('fr-FR'),
                 timestamp: new Date().toISOString()
             };
 
             try {
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'records', id);
+                const docRef = doc(db, 'hydrants_data', docId);
                 await setDoc(docRef, data);
-                popToast("Synchronisé avec succès");
+                popToast("Synchronisé");
                 clearInputs();
                 switchTab('history');
             } catch (e) {
                 popToast("Erreur Cloud", "error");
+            } finally {
+                document.getElementById('btn-save').disabled = false;
             }
         };
 
@@ -350,7 +334,7 @@
             removePhoto();
         }
 
-        window.editRecord = function(id) {
+        window.editEntry = function(id) {
             const r = records.find(x => x.id === id);
             if(!r) return;
             editId = r.id;
@@ -361,7 +345,7 @@
             document.getElementById('inp-pression').value = r.pre;
             document.getElementById('inp-obs').value = r.obs;
             if(r.gps) {
-                document.getElementById('display-gps').innerText = `GPS: ${r.gps}`;
+                document.getElementById('display-gps').innerText = `POSITION GPS : ${r.gps}`;
                 document.getElementById('display-gps').classList.remove('hidden');
             }
             if(r.img) {
@@ -374,26 +358,24 @@
         };
 
         window.deleteRecord = async function(id) {
-            if(!confirm("Supprimer définitivement ce relevé du Cloud ?")) return;
+            if(!confirm("Supprimer ?")) return;
             try {
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'records', id);
+                const docRef = doc(db, 'hydrants_data', id);
                 await deleteDoc(docRef);
-                popToast("Supprimé du Cloud", "error");
+                popToast("Supprimé", "error");
             } catch (e) {
-                popToast("Erreur suppression", "error");
+                popToast("Erreur", "error");
             }
         };
 
-        // --- AFFICHAGE HISTORIQUE ---
         function drawHistory() {
-            const queryVal = document.getElementById('search-bar').value.toLowerCase();
+            const q = document.getElementById('search-bar').value.toLowerCase();
             const box = document.getElementById('list-container');
             box.innerHTML = "";
-
-            const filtered = records.filter(r => r.num.toLowerCase().includes(queryVal));
+            const filtered = records.filter(r => r.num.toLowerCase().includes(q));
 
             if(filtered.length === 0) {
-                box.innerHTML = `<div class="text-center py-20 bg-white rounded-[2.5rem] border-2 border-dashed border-slate-200 text-slate-400 font-bold uppercase text-[10px] tracking-widest">Aucune donnée trouvée</div>`;
+                box.innerHTML = `<div class="text-center py-20 bg-white rounded-[2rem] border-2 border-dashed border-slate-200 text-slate-400 font-bold uppercase text-[10px] tracking-widest">Aucune donnée</div>`;
                 return;
             }
 
@@ -407,13 +389,13 @@
                             <h3 class="font-black uppercase text-sm text-slate-800 truncate">#${r.num}</h3>
                             <span class="text-[9px] font-black text-slate-300 uppercase italic">${r.date.split(' ')[0]}</span>
                         </div>
-                        <p class="text-[11px] text-slate-400 truncate mt-0.5">${r.loc || 'Localisation non définie'}</p>
+                        <p class="text-[11px] text-slate-400 truncate mt-0.5">${r.loc || 'N/A'}</p>
                         <div class="flex gap-2 mt-1">
                             <span class="text-[8px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-black uppercase">${r.inter}</span>
                         </div>
                     </div>
                     <div class="flex gap-1">
-                        <button onclick="editRecord('${r.id}')" class="p-2 text-slate-300 hover:text-blue-500"><i data-lucide="edit-2" class="w-5 h-5"></i></button>
+                        <button onclick="editEntry('${r.id}')" class="p-2 text-slate-300 hover:text-blue-500"><i data-lucide="edit-2" class="w-5 h-5"></i></button>
                         <button onclick="deleteRecord('${r.id}')" class="p-2 text-slate-300 hover:text-rose-600"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
                     </div>
                 `;
@@ -422,85 +404,55 @@
             lucide.createIcons();
         }
 
-        function updateCount() {
-            const el = document.getElementById('badge-count');
-            if(el) el.innerText = records.length;
+        function updateUI() {
+            document.getElementById('badge-count').innerText = records.length;
         }
 
-        // --- EXPORTATIONS ---
         window.exportExcel = function() {
-            if(records.length === 0) return popToast("Historique vide", "error");
             const data = records.map(({img, id, timestamp, ...rest}) => rest);
             const ws = XLSX.utils.json_to_sheet(data);
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Hydrants_FDF");
-            XLSX.writeFile(wb, `FDF_HYDRANTS_${new Date().toLocaleDateString().replace(/\//g,'-')}.xlsx`);
-            popToast("Excel prêt");
+            XLSX.utils.book_append_sheet(wb, ws, "Hydrants");
+            XLSX.writeFile(wb, `FDF_EXPORT_${new Date().toLocaleDateString()}.xlsx`);
         };
 
         window.generatePDF = async function() {
             const num = document.getElementById('inp-numero').value;
             if(!num) return popToast("Numéro requis", "error");
-
-            popToast("Préparation du rapport...");
+            popToast("Rendu du PDF...", "info");
             
-            // On utilise la zone hors-champ pour la capture
             const pdfBox = document.getElementById('render-zone');
-
             document.querySelectorAll('#render-zone #pdf-num').forEach(el => el.innerText = num);
-            document.querySelectorAll('#render-zone #pdf-loc').forEach(el => el.innerText = document.getElementById('inp-localisation').value || "Non communiquée");
-            document.querySelectorAll('#render-zone #pdf-gps').forEach(el => el.innerText = document.getElementById('display-gps').innerText.replace('GPS: ', ''));
+            document.querySelectorAll('#render-zone #pdf-loc').forEach(el => el.innerText = document.getElementById('inp-localisation').value || "N/A");
+            document.querySelectorAll('#render-zone #pdf-gps').forEach(el => el.innerText = document.getElementById('display-gps').innerText);
             document.querySelectorAll('#render-zone #pdf-int').forEach(el => el.innerText = document.getElementById('inp-intervenant').value);
             document.querySelectorAll('#render-zone #pdf-deb').forEach(el => el.innerText = (document.getElementById('inp-debit').value || '0.0') + " m³/h");
             document.querySelectorAll('#render-zone #pdf-pre').forEach(el => el.innerText = (document.getElementById('inp-pression').value || '0.0') + " bar");
-            document.querySelectorAll('#render-zone #pdf-obs').forEach(el => el.innerText = document.getElementById('inp-obs').value || "L'installation est conforme aux spécifications techniques de la ville.");
-            document.querySelectorAll('#render-zone #pdf-date').forEach(el => el.innerText = "Relevé officiel du " + new Date().toLocaleString('fr-FR'));
+            document.querySelectorAll('#render-zone #pdf-obs').forEach(el => el.innerText = document.getElementById('inp-obs').value || "RAS");
+            document.querySelectorAll('#render-zone #pdf-date-render').forEach(el => el.innerText = "Relevé du " + new Date().toLocaleString('fr-FR'));
             
-            const pdfImg = document.querySelector('#render-zone #pdf-img');
-            if(tempPhoto) {
-                pdfImg.src = tempPhoto;
-                pdfImg.style.display = "block";
-            } else {
-                pdfImg.style.display = "none";
-            }
+            if(tempPhoto) document.querySelector('#render-zone #pdf-img').src = tempPhoto;
 
-            // Attente du chargement de l'image dans le DOM invisible
             setTimeout(async () => {
                 try {
-                    const canvas = await html2canvas(pdfBox, { 
-                        scale: 2,
-                        useCORS: true,
-                        logging: false,
-                        windowWidth: 800
-                    });
-                    
+                    const canvas = await html2canvas(pdfBox, { scale: 2, windowWidth: 800 });
                     const imgData = canvas.toDataURL('image/jpeg', 0.95);
-                    const { jsPDF } = window.jspdf;
-                    const pdf = new jsPDF('p', 'mm', 'a4');
-                    
-                    const pdfWidth = pdf.internal.pageSize.getWidth();
-                    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-                    
-                    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-                    pdf.save(`RAPPORT_FDF_${num.replace(/[^a-z0-9]/gi, '_')}.pdf`);
+                    const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4');
+                    const w = pdf.internal.pageSize.getWidth();
+                    const h = (canvas.height * w) / canvas.width;
+                    pdf.addImage(imgData, 'JPEG', 0, 0, w, h);
+                    pdf.save(`RAPPORT_FDF_${num}.pdf`);
                     popToast("PDF Téléchargé");
-                } catch (e) {
-                    popToast("Erreur rendu PDF", "error");
-                }
-            }, 800);
+                } catch (e) { popToast("Erreur PDF", "error"); }
+            }, 1000);
         };
 
-        // --- UTILITAIRES UI ---
         function popToast(msg, type = 'success') {
             const t = document.getElementById('toast');
-            const i = document.getElementById('toast-icon');
+            const iconEl = document.getElementById('toast-icon');
             document.getElementById('toast-text').innerText = msg;
-            
-            let colorClass = "bg-slate-900";
-            if(type === 'error') colorClass = "bg-red-600";
-            if(type === 'info') colorClass = "bg-blue-600";
-
-            t.className = `fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-8 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-top-4 duration-300 ${colorClass} text-white`;
+            let c = type === 'error' ? "bg-red-600" : (type === 'info' ? "bg-blue-600" : "bg-slate-900");
+            t.className = `fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-8 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-top-4 duration-300 ${c} text-white`;
             t.classList.remove('hidden');
             setTimeout(() => t.classList.add('hidden'), 3000);
         }
